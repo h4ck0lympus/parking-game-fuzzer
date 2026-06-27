@@ -8,7 +8,8 @@ use libafl::corpus::Testcase;
 use libafl::events::{Event, EventFirer, EventWithStats, ExecStats};
 use libafl::executors::ExitKind;
 use libafl::feedbacks::{Feedback, StateInitializer};
-use libafl::monitors::stats::{AggregatorOps, UserStats};
+use libafl::monitors::stats::{AggregatorOps, UserStats, UserStatsValue};
+use libafl::state::HasExecutions;
 use libafl_bolts::tuples::{Handle, Handled, MatchNameRef};
 use libafl_bolts::{Error, Named, current_time, impl_serdeany};
 use parking_game::{BoardValue, State};
@@ -207,33 +208,38 @@ pub struct CrashRateFeedback;
 
 /// Metadata which tracks the crash rate of the fuzzer.
 ///
-/// TODO(pt.1): add the necessary `#[derive(...)]` statements for metadata.
+/// (pt.1): add the necessary `#[derive(...)]` statements for metadata.S
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct CrashRateMetadata {
-    // TODO(pt.1): what fields do we need to track in the metadata?
+    // (pt.1): what fields do we need to track in the metadata?
     //  - hint: do this while implementing CrashRateFeedback::is_interesting
+    pub num_crashes: u64,
 }
 
-// TODO(pt.1): other implementation details needed for the metadata
+// (pt.1): other implementation details needed for the metadata
+impl_serdeany!(CrashRateMetadata);
 
 impl<S> StateInitializer<S> for CrashRateFeedback
 where
-    S:, // TODO(pt.1): what traits do we require on the state (S)?
+    S: HasMetadata, // (pt.1): what traits do we require on the state (S)?
 {
     fn init_state(&mut self, state: &mut S) -> Result<(), Error> {
-        todo!("(pt.1) add a default CrashRateMetadata to the state")
+        state.add_metadata(CrashRateMetadata::default());
+        Ok(())
     }
 }
 
 impl Named for CrashRateFeedback {
     fn name(&self) -> &Cow<'static, str> {
-        todo!("(pt.1) give the feedback an appropriate name")
+        static NAME: Cow<'static, str> = Cow::Borrowed("pg_crashrate_fb");
+        &NAME
     }
 }
 
 impl<EM, I, OT, S> Feedback<EM, I, OT, S> for CrashRateFeedback
 where
     EM: EventFirer<I, S>,
-    S:, // TODO(pt.1) what traits do we require on the state (S)?
+    S: HasMetadata + HasExecutions, // (pt.1) what traits do we require on the state (S)?
 {
     fn is_interesting(
         &mut self,
@@ -243,11 +249,18 @@ where
         _observers: &OT,
         exit_kind: &ExitKind,
     ) -> Result<bool, Error> {
-        // TODO(pt.1) update the number of crashes observed so far
+        // (pt.1) update the number of crashes observed so far
         //  - get a mutable reference to the CrashRateMetadata from the state
         //    - hint: you may need a turbofish: https://turbo.fish/
         //  - update the number of crashes in metadata so far by checking exit_kind
 
+        let metadata = state.metadata_mut::<CrashRateMetadata>()?;
+        match exit_kind {
+            ExitKind::Crash => {
+                metadata.num_crashes += 1;
+            }
+            _ => {}
+        }
         Ok(false)
     }
 
@@ -258,9 +271,9 @@ where
         _observers: &OT,
         _testcase: &mut Testcase<I>,
     ) -> Result<(), Error> {
-        // TODO(pt.1) get the crash metadata and execution counts
-        let crashes = 0;
-        let executions = 0;
+        // (pt.1) get the crash metadata and execution counts
+        let crashes = state.metadata::<CrashRateMetadata>().unwrap().num_crashes;
+        let executions = *state.executions();
 
         manager.fire(
             state,
@@ -268,7 +281,8 @@ where
                 Event::UpdateUserStats {
                     name: self.name().clone(),
                     value: UserStats::new(
-                        todo!("(pt.1) report the ratio of crashes to executions"),
+                        // todo!("(pt.1) report the ratio of crashes to executions"),
+                        UserStatsValue::Ratio(crashes, executions),
                         AggregatorOps::Avg, // if aggregated, report the average number
                     ),
                     phantom: PhantomData,

@@ -60,9 +60,10 @@ where
         //  - first, pick a random index in the moves using `state.rand_mut().below(...)`
         //  - second, pick a random direction using `state.rand_mut().choose(...)`
         //  - finally, insert the (car, direction) tuple at the generated index
+        let num_positions = input.moves().len() + 1;
         let rand_idx = state
             .rand_mut()
-            .below(NonZeroUsize::new(self.count).unwrap());
+            .below(NonZeroUsize::new(num_positions).unwrap());
 
         let directions = &[
             Direction::Up,

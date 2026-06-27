@@ -236,7 +236,7 @@ fn step_until_seen<T: BoardValue>(
     //  - hint: an obstacle directly adjacent should be considered as zero units away
     //  - this method is _extensively_ tested in simple_observation
     loop {
-        let Some(new_position) = from.shift(direction, distance + offset) else {
+        let Some(new_position) = from.shift(direction, offset) else {
             return View::new(direction, None, distance);
         };
 
