@@ -7,7 +7,7 @@ use libafl::mutators::{MutationResult, Mutator};
 use libafl::state::{HasCurrentTestcase, HasRand};
 use libafl_bolts::Named;
 use libafl_bolts::rands::Rand;
-use parking_game::{BoardValue, State};
+use parking_game::{BoardValue, Direction, State};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
@@ -56,12 +56,25 @@ where
         )
         .unwrap();
 
-        // TODO(pt.0): insert a random move at a random position
+        // insert a random move at a random position
         //  - first, pick a random index in the moves using `state.rand_mut().below(...)`
         //  - second, pick a random direction using `state.rand_mut().choose(...)`
         //  - finally, insert the (car, direction) tuple at the generated index
+        let rand_idx = state
+            .rand_mut()
+            .below(NonZeroUsize::new(self.count).unwrap());
 
-        todo!("Indicate that the input was mutated")
+        let directions = &[
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ];
+        let rand_dir: Direction = state.rand_mut().choose(directions).cloned().unwrap();
+
+        input.moves_mut().insert(rand_idx, (car, rand_dir));
+
+        Ok(MutationResult::Mutated)
     }
 
     fn post_exec(&mut self, _state: &mut S, _new_corpus_id: Option<CorpusId>) -> Result<(), Error> {

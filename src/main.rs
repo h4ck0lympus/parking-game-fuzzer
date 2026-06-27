@@ -10,6 +10,8 @@ pub mod stages;
 
 use crate::input::PGInput;
 use libafl::corpus::{Corpus, InMemoryCorpus};
+use libafl::feedback_or;
+use libafl::feedbacks::CombinedFeedback;
 use libafl::state::{HasSolutions, StdState};
 use libafl_bolts::rands::StdRand;
 use parking_game::{BoardValue, Car, Orientation, Position, State};
@@ -17,7 +19,10 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::error::Error;
 use std::fmt::Debug;
+use std::iter::Map;
 use std::{env, fs};
+
+use self::observers::{FinalStateObserver, ViewObserver};
 
 /// Parses a map with the following rules:
 /// 1. Empty spaces are denoted with `.`.
@@ -79,7 +84,7 @@ where
                 (None, next) => {
                     prev = Some(next);
                 }
-            }
+            } 
         }
 
         if let Some(car) = prev.take() {
@@ -132,8 +137,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // TODO(pt.1): create a ViewObserver with ViewObserver::<u8>::default()
     // this creates a view observer for a map which is indexed by u8s
+    // let view_observer = ViewObserver::<u8>::default();
 
     // TODO(pt.1): create a FinalStateObserver with its default method for a map indexed by u8s
+    // let final_state_observer = FinalStateObserver::<u8>::default();
 
     // TODO(pt.1): create a feedback which will add an entry to the corpus if we see a new state
     //  - this feedback should first check that the target has **not** "crashed"

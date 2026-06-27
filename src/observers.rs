@@ -107,9 +107,10 @@ where
     fn hash(&self) -> Option<u64> {
         if let Some(final_state) = &self.final_state {
             let mut hasher = DefaultHasher::new();
-            // TODO(pt.0): build a hash which uniquely identifies the state
+            // build a hash which uniquely identifies the state
             //  - remember, not all parts of the state need to be hashed to identify it uniquely
             //  - only hash the parts which are necessary to distinguish the states
+            final_state.hash(&mut hasher);
             Some(hasher.finish())
         } else {
             None
@@ -228,13 +229,35 @@ fn step_until_seen<T: BoardValue>(
         Direction::Down | Direction::Right => *board.state().cars()[car.get() - 1].1.length(),
     };
     let mut distance = T::zero();
-    // TODO(pt.0): find the obstacle first encountered in the direction provided
+    // find the obstacle first encountered in the direction provided
     //  - hint: you can use `position.shift(...)` to get a position at a given offset
     //    - check return values for both `position.shift(...)` and `board.get(...)` for gotchas
     //  - hint: you can increment offset with `offset += T::one()`, likewise with distance
     //  - hint: an obstacle directly adjacent should be considered as zero units away
     //  - this method is _extensively_ tested in simple_observation
-    todo!("Implement as above!")
+    loop {
+        let Some(new_position) = from.shift(direction, distance + offset) else {
+            return View::new(direction, None, distance);
+        };
+
+        match board.get(new_position) {
+            None => {
+                // outside board
+                return View::new(direction, None, distance);
+            }
+
+            Some(None) => {
+                // square is empty
+                offset += T::one();
+                distance += T::one();
+            }
+
+            Some(Some(car_idx)) => {
+                // some car has occupied this
+                return View::new(direction, Some(car_idx), distance);
+            }
+        }
+     } 
 }
 
 impl<T> PGObserver<T> for ViewObserver<T>

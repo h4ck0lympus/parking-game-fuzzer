@@ -57,6 +57,7 @@ where
         // first: increment the executions for tracking how many times we've run so far
         *state.executions_mut() += 1;
 
+        // this state is game state 
         let (mut state, moves) = (|| {
             // this is a closure which allows us to do better control flow
             // you can `return` values in this block to assign them to the variables above
@@ -79,10 +80,15 @@ where
             .board_mut()
             .map_err(|e| Error::illegal_state(e.to_string()))?;
 
-        // TODO(pt.0): apply the moves in sequence
+        // apply the moves in sequence
         //  - check the docs for how to apply moves to a board
         //    - see: https://docs.rs/parking-game/latest/parking_game/struct.Board.html
         //  - if an error occurs during a move, return `Ok(ExitKind::Crash)`.
+        for &(car, dir) in input.moves() {
+            if board.shift_car(car, dir).is_err() {
+                return Ok(ExitKind::Crash)
+            }
+        }
         // TODO(pt.3): add a microsecond delay *after each move* to simulate cost:
         // sleep(Duration::from_micros(1));
 
@@ -111,6 +117,7 @@ mod test {
 
     #[test]
     fn simple_run_check() -> Result<(), Box<dyn Error>> {
+        // initialize and parse map
         let initial = crate::parse_map::<u8>(
             r#"
         oo.
