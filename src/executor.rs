@@ -1,7 +1,12 @@
 //! Executor implementation for [`parking_game`] puzzles.
 
+use std::thread::sleep;
+use std::time::Duration;
+
+use crate::feedbacks::FinalStateMetadata;
 use crate::input::PGInput;
 use crate::observers::PGObserverTuple;
+use libafl::HasMetadata;
 use libafl::executors::{Executor, ExitKind, HasObservers};
 use libafl::state::{HasCurrentTestcase, HasExecutions};
 use libafl_bolts::Error;
@@ -63,7 +68,7 @@ where
             // you can `return` values in this block to assign them to the variables above
             // clippy will complain about this for now, but you'll need it later
 
-            // TODO(pt.3): load the snapshot from the testcase so we don't have to replay moves
+            // (pt.3): load the snapshot from the testcase so we don't have to replay moves
             //  - how do we access the snapshot?
             //    - hint: we mutated from the current testcase in the state
             //    - hint: how do we access the metadata describing the snapshot from the testcase?
@@ -71,9 +76,24 @@ where
             //  - make sure to check that the snapshot is valid
             //    - the prefix of moves are the same
             //    - the returned sequence of moves is after that prefix (use the slice operator)
+            let Ok(parent) = state.current_testcase() else {
+                // create a local copy of the initial instance and get the moves we're about to apply
+                return Ok::<_, Error>((self.initial.clone(), input.moves()))
+            };
+            let parent_input = parent.input().as_ref().unwrap();
+            let parent_metadata = parent.metadata::<FinalStateMetadata<T>>()?;
 
-            // create a local copy of the initial instance and get the moves we're about to apply
-            Ok::<_, Error>((self.initial.clone(), input.moves()))
+            // verify the parent moves are prefix of input
+            if !parent_input.is_prefix_of(input) {
+                return Err(Error::illegal_state(
+                    "Parent input is not a prefix of the mutated input".to_string(),
+                ));
+            }
+
+            let prefix_len = parent_input.moves().len();
+            let snapshot = parent_metadata.state().clone();
+
+            return Ok((snapshot, &input.moves()[prefix_len..]));
         })()?;
         // load the game board from the state, or return an error if there's something wrong
         let mut board = state
@@ -84,13 +104,13 @@ where
         //  - check the docs for how to apply moves to a board
         //    - see: https://docs.rs/parking-game/latest/parking_game/struct.Board.html
         //  - if an error occurs during a move, return `Ok(ExitKind::Crash)`.
-        for &(car, dir) in input.moves() {
+        for &(car, dir) in moves {
             if board.shift_car(car, dir).is_err() {
                 return Ok(ExitKind::Crash);
             }
+            // (pt.3): add a microsecond delay *after each move* to simulate cost:
+            sleep(Duration::from_micros(1));
         }
-        // TODO(pt.3): add a microsecond delay *after each move* to simulate cost:
-        // sleep(Duration::from_micros(1));
 
         // send the final board to all the observers
         self.observers.final_board_all(&board);

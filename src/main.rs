@@ -29,7 +29,9 @@ use std::fmt::Debug;
 use std::iter::Map;
 use std::{env, fs};
 
-use self::feedbacks::{CrashRateFeedback, SolvedFeedback, ViewFeedback};
+use self::feedbacks::{
+    CrashRateFeedback, FinalStateFeedback, FinalStateMetadata, SolvedFeedback, ViewFeedback,
+};
 use self::mutators::{PGRandMutator, PGTailMutator};
 use self::observers::{FinalStateObserver, ViewObserver};
 
@@ -161,19 +163,35 @@ fn main() -> Result<(), Box<dyn Error>> {
     // (pt.1): after implementing CrashRateFeedback, add it here at an appropriate place
     //  - you should see a failure rate of >80% for tokyo1.map, >95% for tokyo36.map
     //  - hint: consider the order of the feedback evaluation; where would be best to put this?
-    // TODO(pt.2): make the feedback compatible with PGTailMutator
+    // (pt.2): make the feedback compatible with PGTailMutator
     //  - for the tail mutator to work, we need to stash the view data
     //  - what feedback does this? how do we combine it with the existing feedbacks?
-    // TODO(pt.3): make the feedback compatible with snapshot fuzzing
+    // (pt.3): make the feedback compatible with snapshot fuzzing
     //  - the tail mutator makes re-executing the input redundant for prefix of moves
     //  what feedback stashes the final state? how do we combine it with the existing feedbacks?
-    let final_state_feedback = NewHashFeedback::new(&final_state_observer);
-    // not crashed (went outside the board or occupied pos) and final state is correct
-    let valid_new_state =
-        feedback_and_fast!(feedback_not!(CrashFeedback::new()), final_state_feedback);
 
-    let metadata_feedback = feedback_or!(ViewFeedback::new(&view_observer), valid_new_state);
-    let mut feedback = feedback_or!(CrashRateFeedback, metadata_feedback);
+    // CrashRateFeedback
+    //      counts crashes
+    //      return false
+    //  ViewFeedback
+    //      attached ViewMetadata
+    //      returns false
+    //  FinalStateFeedback
+    //      attached FinalStateMetadata
+    //      returns false
+    //  valid_new_state
+    //      decides corpus admission
+    let new_state_feedback = NewHashFeedback::new(&final_state_observer);
+    // we got a new state and
+    // it's not crash (position is not outside the board or occupied by another car)
+    let valid_new_state =
+        feedback_and_fast!(feedback_not!(CrashFeedback::new()), new_state_feedback);
+    let mut feedback = feedback_or!(
+        CrashRateFeedback,
+        ViewFeedback::new(&view_observer),
+        FinalStateFeedback::new(&final_state_observer),
+        valid_new_state
+    );
 
     // (pt.1): create an objective which will determine if the puzzle is solved
     //  - this feedback should first check that the target has **not** "crashed"
@@ -229,7 +247,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     //    - what variable from earlier implements this?
     //  - hint: how do we make an input with no moves?
     let initial_input = PGInput::default(); // input with no moves
-    fuzzer.evaluate_input(&mut state, &mut executor, &mut manager, &initial_input);
+    let _ = fuzzer.evaluate_input(&mut state, &mut executor, &mut manager, &initial_input);
 
     // (pt.1): loop and fuzz until we have a solution
     //  - we don't need to fuzz forever; just until we find an input that gets the puzzle solved

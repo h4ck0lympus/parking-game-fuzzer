@@ -10,7 +10,7 @@ use libafl::executors::ExitKind;
 use libafl::feedbacks::{Feedback, StateInitializer};
 use libafl::monitors::stats::{AggregatorOps, UserStats, UserStatsValue};
 use libafl::state::HasExecutions;
-use libafl_bolts::tuples::{Handle, Handled, MatchNameRef};
+use libafl_bolts::tuples::{Append, Handle, Handled, MatchNameRef};
 use libafl_bolts::{Error, Named, current_time, impl_serdeany};
 use parking_game::{BoardValue, State};
 use serde::de::DeserializeOwned;
@@ -100,7 +100,7 @@ impl<T> FinalStateFeedback<T> {
     /// Create a new [`FinalStateFeedback`] which will collect the final state from the provided
     /// [`FinalStateObserver`].
     pub fn new(obs: &FinalStateObserver<T>) -> Self {
-        todo!("(pt.3) save the handle to the observer!")
+        Self { obs: obs.handle() }
     }
 }
 
@@ -141,7 +141,7 @@ where
         _observers: &OT,
         _exit_kind: &ExitKind,
     ) -> Result<bool, Error> {
-        todo!("(pt.3) indicate that this feedback did not find the testcase interesting")
+        Ok(false)
     }
 
     fn append_metadata(
@@ -151,7 +151,11 @@ where
         observers: &OT,
         testcase: &mut Testcase<PGInput>,
     ) -> Result<(), Error> {
-        todo!("(pt.3) get the observer, then create the metadata and save it to the testcase!")
+        let obs = observers.get(&self.obs).unwrap();
+        testcase.add_metadata(FinalStateMetadata{
+           state: obs.final_state().unwrap().clone()
+        });
+        Ok(())
     }
 }
 

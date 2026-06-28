@@ -29,6 +29,10 @@ impl PGInput {
     pub fn moves_mut(&mut self) -> &mut Vec<(NonZeroUsize, Direction)> {
         &mut self.moves
     }
+
+    pub fn is_prefix_of(&self, other: &PGInput) -> bool {
+        other.moves().starts_with(self.moves())
+    }
 }
 
 // Make it compatible with LibAFL!
