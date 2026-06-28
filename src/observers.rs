@@ -257,7 +257,7 @@ fn step_until_seen<T: BoardValue>(
                 return View::new(direction, Some(car_idx), distance);
             }
         }
-     } 
+    }
 }
 
 impl<T> PGObserver<T> for ViewObserver<T>

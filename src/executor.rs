@@ -57,7 +57,7 @@ where
         // first: increment the executions for tracking how many times we've run so far
         *state.executions_mut() += 1;
 
-        // this state is game state 
+        // this state is game state
         let (mut state, moves) = (|| {
             // this is a closure which allows us to do better control flow
             // you can `return` values in this block to assign them to the variables above
@@ -86,7 +86,7 @@ where
         //  - if an error occurs during a move, return `Ok(ExitKind::Crash)`.
         for &(car, dir) in input.moves() {
             if board.shift_car(car, dir).is_err() {
-                return Ok(ExitKind::Crash)
+                return Ok(ExitKind::Crash);
             }
         }
         // TODO(pt.3): add a microsecond delay *after each move* to simulate cost:

@@ -29,8 +29,8 @@ use std::fmt::Debug;
 use std::iter::Map;
 use std::{env, fs};
 
-use self::feedbacks::{CrashRateFeedback, SolvedFeedback};
-use self::mutators::PGRandMutator;
+use self::feedbacks::{CrashRateFeedback, SolvedFeedback, ViewFeedback};
+use self::mutators::{PGRandMutator, PGTailMutator};
 use self::observers::{FinalStateObserver, ViewObserver};
 
 /// Parses a map with the following rules:
@@ -146,10 +146,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // (pt.1): create a ViewObserver with ViewObserver::<u8>::default()
     // this creates a view observer for a map which is indexed by u8s
-    let view_observer = ViewObserver::<u8>::default();
+    let view_observer = ViewObserver::<u8>::default(); // calc legal moves
 
     // (pt.1): create a FinalStateObserver with its default method for a map indexed by u8s
-    let final_state_observer = FinalStateObserver::<u8>::default();
+    let final_state_observer = FinalStateObserver::<u8>::default(); // captures final state
 
     // (pt.1): create a feedback which will add an entry to the corpus if we see a new state
     //  - this feedback should first check that the target has **not** "crashed"
@@ -166,13 +166,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     //  - what feedback does this? how do we combine it with the existing feedbacks?
     // TODO(pt.3): make the feedback compatible with snapshot fuzzing
     //  - the tail mutator makes re-executing the input redundant for prefix of moves
-    //  - what feedback stashes the final state? how do we combine it with the existing feedbacks?
-    let new_state_feedback = NewHashFeedback::new(&final_state_observer);
-    let valid_new_state = feedback_and_fast!(feedback_not!(CrashFeedback::new()), new_state_feedback);
-    let mut feedback = feedback_or!(
-        CrashRateFeedback,
-        valid_new_state,
-    );
+    //  what feedback stashes the final state? how do we combine it with the existing feedbacks?
+    let final_state_feedback = NewHashFeedback::new(&final_state_observer);
+    // not crashed (went outside the board or occupied pos) and final state is correct
+    let valid_new_state =
+        feedback_and_fast!(feedback_not!(CrashFeedback::new()), final_state_feedback);
+
+    let metadata_feedback = feedback_or!(ViewFeedback::new(&view_observer), valid_new_state);
+    let mut feedback = feedback_or!(CrashRateFeedback, metadata_feedback);
 
     // (pt.1): create an objective which will determine if the puzzle is solved
     //  - this feedback should first check that the target has **not** "crashed"
@@ -193,8 +194,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
 
     // (pt.1): create a PGRandMutator with &init
-    let mutator = PGRandMutator::new(&init);
-    // TODO(pt.2): replace it with a PGTailMutator
+    // let mutator = PGRandMutator::new(&init);
+    // (pt.2): replace it with a PGTailMutator
+    let mutator = PGTailMutator::new(&init);
 
     // (pt.1): create an executor and pass your observers to it
     //  - provide the view and final state observers
@@ -236,12 +238,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     //  - hint: what fuzz method would be most appropriate?
     //    - see: https://docs.rs/libafl/latest/libafl/fuzzer/trait.Fuzzer.html
     while state.solutions().count() == 0 {
-        fuzzer.fuzz_one(
-            &mut stages, 
-            &mut executor,
-            &mut state, 
-            &mut manager
-        )?;
+        fuzzer.fuzz_one(&mut stages, &mut executor, &mut state, &mut manager)?;
     }
 
     // get the last input and print out the moves!

@@ -11,7 +11,7 @@ pub struct PGInput {
     moves: Vec<(NonZeroUsize, Direction)>,
 }
 
-// input format - ((car1, dir1), (car, dir) ... ) 
+// input format - ((car1, dir1), (car, dir) ... )
 impl PGInput {
     /// Create a new [`PGInput`] from the provided sequence of moves.
     pub fn new(moves: Vec<(NonZeroUsize, Direction)>) -> Self {

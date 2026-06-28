@@ -1,22 +1,29 @@
 //! Mutators for [`PGInput`]s -- so you can fuzz [`parking_game`] puzzles!
 
+use crate::feedbacks::{CrashRateMetadata, ViewMetadata};
 use crate::input::PGInput;
-use libafl::Error;
-use libafl::corpus::CorpusId;
+use crate::observers::ViewFrom;
+use libafl::corpus::{CorpusId, Testcase};
 use libafl::mutators::{MutationResult, Mutator};
 use libafl::state::{HasCurrentTestcase, HasRand};
+use libafl::{Error, HasMetadata};
 use libafl_bolts::Named;
 use libafl_bolts::rands::Rand;
+use libafl_bolts::tuples::{Append, tuple_list};
 use parking_game::{BoardValue, Direction, State};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
+use std::fs::metadata;
 use std::marker::PhantomData;
 use std::num::NonZeroUsize;
 
 /// Randomly mutate the moves -- at any point with anything.
 ///
-/// TODO(pt.1): explain PGRandMutator's weaknesses in a comment.
+/// (pt.1): explain PGRandMutator's weaknesses in a comment.
+/// rand mutator's weakness is that it's putting moves at random valid idx but it's not changing the moves
+/// or removing any moves at existing idx. Also adding moves without checking validity, can
+/// invalidate the input.
 pub struct PGRandMutator<T> {
     count: usize,
     phantom: PhantomData<T>,
@@ -112,7 +119,7 @@ where
     T: BoardValue + DeserializeOwned + Serialize + 'static,
 {
     fn mutate(&mut self, state: &mut S, input: &mut PGInput) -> Result<MutationResult, Error> {
-        // TODO(pt.2): build a tail mutator which only utilizes valid mutations
+        // (pt.2): build a tail mutator which only utilizes valid mutations
         //  - first, get the current testcase and extract the metadata for its views
         //  - second, build a list of choices for mutation
         //    - this should include each possible direction of movement for each car at each
@@ -123,8 +130,32 @@ where
         //    - `drop(...)` the testcase after use so that you can mutably use the state again
         //  - finally, select from this list randomly with `state.rand_mut().choose(...)` and apply
         //    the mutation with `.push()` (potentially multiple times for `T > 1`)
+        let current_testcase = state.current_testcase()?;
+        let metadata = current_testcase.metadata::<ViewMetadata<T>>()?;
+        let mut choices: Vec<(NonZeroUsize, Direction, T)> = Vec::new();
+        for (car, view_from) in metadata.views() {
+            for view in [view_from.backward(), view_from.forward()] {
+                let mut distance = *view.distance();
 
-        todo!("Indicate that the input was mutated")
+                while !distance.is_zero() {
+                    choices.push((car, view.direction(), distance));
+                    distance -= T::one();
+                }
+            }
+        }
+        drop(current_testcase); // drop it so we can mutate state
+
+        if choices.is_empty() {
+            return Ok(MutationResult::Skipped);
+        }
+
+        let &(car, direction, mut distance) = state.rand_mut().choose(&choices).unwrap();
+
+        while !distance.is_zero() {
+            input.moves_mut().push((car, direction));
+            distance -= T::one();
+        }
+        Ok(MutationResult::Mutated)
     }
 
     fn post_exec(&mut self, _state: &mut S, _new_corpus_id: Option<CorpusId>) -> Result<(), Error> {
